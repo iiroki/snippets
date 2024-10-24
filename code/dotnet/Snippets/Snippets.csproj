@@ -5,4 +5,9 @@
     <Nullable>enable</Nullable>
     <RootNamespace>Snippets</RootNamespace>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Cronos" Version="0.8.4" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
+  </ItemGroup>
 </Project>

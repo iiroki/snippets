@@ -23,7 +23,7 @@ public static class Duration
             "min" or "minute" or "minutes" => TimeSpan.FromMinutes,
             "h" or "hour" or "hours" => TimeSpan.FromHours,
             "d" or "day" or "days" => TimeSpan.FromDays,
-            _ => throw new ArgumentException($"Unknown duration unit: {unit}")
+            _ => throw new ArgumentException($"Unknown duration unit: {unit}"),
         };
 
     private static double ParseValue(string text) =>
