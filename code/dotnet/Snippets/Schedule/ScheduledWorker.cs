@@ -21,12 +21,14 @@ public abstract class ScheduledWorker(string? schedule, Func<DateTime>? nowProvi
     protected readonly ILogger? Logger = logger;
 
     private CronExpression? _schedule;
-    protected CronExpression Schedule => _schedule ?? throw new InvalidOperationException("Schedule not initialized");
+    public CronExpression Schedule => _schedule ?? throw new InvalidOperationException("Schedule not initialized");
+
+    public bool IsDisabled => string.IsNullOrWhiteSpace(_scheduleRaw);
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         Logger?.LogInformation("Starting...");
-        if (string.IsNullOrWhiteSpace(_scheduleRaw))
+        if (IsDisabled)
         {
             Logger?.LogInformation("Disabled - Schedule not defined");
             return;
