@@ -27,6 +27,8 @@ public abstract class ScheduledWorker(string? schedule, Func<DateTime>? nowProvi
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
+        ct.Register(() => Logger?.LogInformation("Stopping..."));
+
         Logger?.LogInformation("Starting...");
         if (IsDisabled)
         {
@@ -41,19 +43,26 @@ public abstract class ScheduledWorker(string? schedule, Func<DateTime>? nowProvi
         }
 
         Logger?.LogInformation("Schedule: {S}", Schedule);
-        var hasNextJob = await WaitForNextJobAsync(ct);
-        if (!hasNextJob)
-        {
-            Logger?.LogWarning("Schedule has no upcoming jobs");
-            return;
-        }
 
-        while (hasNextJob && !ct.IsCancellationRequested)
+        DateTime? nextJobTs = null;
+        while (!ct.IsCancellationRequested)
         {
+            nextJobTs = GetNextJobTimestamp(nextJobTs);
+            if (!nextJobTs.HasValue)
+            {
+                Logger?.LogInformation("Schedule has no upcoming jobs: {S}", Schedule);
+                break;
+            }
+
+            Logger?.LogDebug("Next job timestamp: {T}Z", nextJobTs.Value.ToString("O"));
             try
             {
-                await InvokeAsync(ct);
-                hasNextJob = await WaitForNextJobAsync(ct);
+                await WaitUntilAsync(nextJobTs.Value, ct);
+
+                // Invoke the job on another thread so it won't block this loop
+                Logger?.LogDebug("Invoking...");
+                var invocationTs = nextJobTs.Value;
+                _ = Task.Run(() => InvokeAsync(invocationTs, ct), CancellationToken.None);
             }
             catch (OperationCanceledException)
             {
@@ -64,20 +73,17 @@ public abstract class ScheduledWorker(string? schedule, Func<DateTime>? nowProvi
         Logger?.LogInformation("Completed");
     }
 
-    protected abstract Task InvokeAsync(CancellationToken ct);
+    protected abstract Task InvokeAsync(DateTime ts, CancellationToken ct);
 
-    private async Task<bool> WaitForNextJobAsync(CancellationToken ct)
+    private async Task WaitUntilAsync(DateTime ts, CancellationToken ct)
     {
-        var nextTs = GetNextJobTimestamp();
-        if (!nextTs.HasValue)
+        var now = NowProvider();
+        var wait = ts - now;
+        if (wait.Ticks > 0)
         {
-            return false;
+            await Task.Delay(wait, ct);
         }
-
-        Logger?.LogInformation("Next job timestamp: {T}>", nextTs.Value.ToString("O"));
-        await Task.Delay(NowProvider() - nextTs.Value, ct);
-        return true;
     }
 
-    private DateTime? GetNextJobTimestamp() => Schedule.GetNextOccurrence(NowProvider());
+    private DateTime? GetNextJobTimestamp(DateTime? fromTs) => Schedule.GetNextOccurrence(fromTs ?? NowProvider());
 }
