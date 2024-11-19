@@ -10,4 +10,8 @@
     <PackageReference Include="Cronos" Version="0.8.4" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
   </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="$(AssemblyName).Tests" />
+  </ItemGroup>
 </Project>
