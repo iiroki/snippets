@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Snippets.Database;
 
 namespace Snippets.Outbox;
 
@@ -55,16 +56,15 @@ public class OutboxService(IDbContextFactory<OutboxDbContext> dbFactory, OutboxS
         var now = GetTimestamp();
         if (@params.Receipt.HasValue)
         {
-            var status = @params.Result.Action switch
+            OutboxStatus? status = @params.Result.Action switch
             {
                 OutboxAction.Complete => OutboxStatus.Success,
                 OutboxAction.Error => OutboxStatus.Error,
-                // JobStatus.Update => null,
+                OutboxAction.Update => null,
                 _ => OutboxStatus.Unknown,
             };
 
-            await using var db = await _dbFactory.CreateDbContextAsync(ct);
-            return await Update(db, id, @params.Receipt.Value, status, now, null, ct);
+            return await Update(id, @params.Receipt.Value, status, now, @params.Result.Metadata, ct);
         }
 
         throw new OutboxException($"Could not update outbox job without a receipt - ID: {id}");
@@ -103,23 +103,25 @@ public class OutboxService(IDbContextFactory<OutboxDbContext> dbFactory, OutboxS
 
     private DateTime GetTimestamp() => _options.TimestampProvider?.Invoke() ?? DateTime.UtcNow;
 
-    private static async Task<OutboxJobEntity> Update(
-        OutboxDbContext db,
+    private async Task<OutboxJobEntity> Update(
         long id,
         Guid receipt,
-        OutboxStatus status,
+        OutboxStatus? status,
         DateTime now,
         JsonElement? metadata,
         CancellationToken ct = default
     )
     {
-        var isCompleted = status != OutboxStatus.Unknown;
+        var isCompleted = status is not (null or OutboxStatus.Unknown);
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var converter = db.Model.FindValueConverter<OutboxJobEntity>(nameof(OutboxJobEntity.Metadata));
 
         FormattableString sql = $"""
             UPDATE outbox
             SET
                 status = {status},
-                metadata = COALESCE({metadata}, metadata),
+                metadata = COALESCE({converter?.ConvertToProvider(metadata)}, metadata),
                 completed_ts = {(isCompleted ? now : null)},
                 updated_ts = {now}
             WHERE

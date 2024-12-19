@@ -19,10 +19,7 @@ public class OutboxDbContext(DbContextOptions<OutboxDbContext> opt, JsonSerializ
     protected override void OnModelCreating(ModelBuilder builder)
     {
         var converter = new JsonStringConverter(_jsonOpt);
-
-        builder.Entity<OutboxJobEntity>().Property(e => e.Data).HasConversion(converter);
-
-        builder.Entity<OutboxJobEntity>().Property(e => e.Metadata).HasConversion(converter);
+        builder.HasGlobalValueConverter<JsonElement>(converter);
     }
 }
 

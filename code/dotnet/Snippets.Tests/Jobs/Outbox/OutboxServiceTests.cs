@@ -49,6 +49,7 @@ public sealed class OutboxServiceTests : IAsyncDisposable
             Count = count,
             Timeout = TimeSpan.FromMinutes(1),
         };
+
         var result = await _service.GetNext(@params);
 
         // Assert
@@ -76,6 +77,7 @@ public sealed class OutboxServiceTests : IAsyncDisposable
             Count = 1,
             ShouldPeek = true,
         };
+
         var jobs = await _service.GetNext(@params);
 
         // Assert
@@ -98,6 +100,7 @@ public sealed class OutboxServiceTests : IAsyncDisposable
             Count = 5,
             Timeout = TimeSpan.FromMinutes(1),
         };
+
         var result = await _service.GetNext(@params);
 
         // Assert
@@ -116,6 +119,7 @@ public sealed class OutboxServiceTests : IAsyncDisposable
             Count = 1,
             Timeout = TimeSpan.FromMinutes(1),
         };
+
         var job = (await _service.GetNext(nextParams)).First();
 
         // Act
@@ -138,6 +142,45 @@ public sealed class OutboxServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Resolve_Update_Ok()
+    {
+        // Arrange
+        var now = DateTime.UtcNow;
+        await SeedJobs(10, now);
+        var nextParams = new OutboxGetParams
+        {
+            Key = TestKey,
+            Count = 1,
+            Timeout = TimeSpan.FromMinutes(1),
+        };
+
+        var job = (await _service.GetNext(nextParams)).First();
+
+        // Act
+        _timestamp = now.AddMinutes(5);
+        var resolveParams = new OutboxResolveParams
+        {
+            Result = new OutboxResult
+            {
+                Action = OutboxAction.Update,
+                Metadata = JsonSerializer.SerializeToElement(new { Updated = true }),
+            },
+            Receipt = job.Receipt,
+        };
+
+        await _service.Resolve(job.Id, resolveParams);
+
+        // Assert
+        await using var db = new OutboxDbContext(_dbOpt);
+        var actual = await db.Outbox.FindAsync(job.Id);
+        Assert.NotNull(actual);
+        Assert.Null(actual.Status);
+        Assert.Null(actual.CompletedTs);
+        Assert.Equal(_timestamp, actual.UpdatedTs);
+        Assert.Equivalent(resolveParams.Result.Metadata, actual.Metadata);
+    }
+
+    [Fact]
     public async Task Activate_Ok()
     {
         // Arrange
@@ -150,6 +193,7 @@ public sealed class OutboxServiceTests : IAsyncDisposable
             Count = 5,
             ShouldPeek = true,
         };
+
         var initJobs = await _service.GetNext(initParams);
 
         // Act
