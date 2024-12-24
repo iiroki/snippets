@@ -118,7 +118,7 @@ public class OutboxService(IDbContextFactory<OutboxDbContext> dbFactory, OutboxS
         var converter = db.Model.FindValueConverter<OutboxJobEntity>(nameof(OutboxJobEntity.Metadata));
 
         FormattableString sql = $"""
-            UPDATE outbox
+            UPDATE @@table
             SET
                 status = {status},
                 metadata = COALESCE({converter?.ConvertToProvider(metadata)}, metadata),
@@ -131,7 +131,7 @@ public class OutboxService(IDbContextFactory<OutboxDbContext> dbFactory, OutboxS
             RETURNING *;
             """;
 
-        var updated = await db.Outbox.FromSql(sql).AsNoTracking().ToListAsync(ct);
+        var updated = await db.Outbox.FromSqlWithTable(sql).AsNoTracking().ToListAsync(ct);
         if (updated.Count == 0)
         {
             throw new OutboxException($"Could not update outbox job - ID: {id}, Receipt: ${receipt}");

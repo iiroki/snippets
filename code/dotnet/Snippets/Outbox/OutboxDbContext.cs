@@ -1,5 +1,7 @@
+using System.Data.Common;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Snippets.Database;
 
 namespace Snippets.Outbox;
